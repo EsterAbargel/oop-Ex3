@@ -9,7 +9,7 @@ import org.json.JSONObject;
 
 import dataStructure.edge_data;
 import dataStructure.node_data;
-import gui.GraphGui;
+import gui.Graph_GUI;
 import utils.Point3D;
 
 public class DGraph implements graph,Serializable{
@@ -18,7 +18,7 @@ public class DGraph implements graph,Serializable{
 	public HashMap<Integer,HashMap<Integer,edge_data>> ed=new HashMap<>();
 	private int mc=0;
 	private int countEdges=0;
-	private GraphGui updater;
+	private Graph_GUI updater;
 
 	public DGraph(NodeData [] vertices,EdgeData[] edge) {
 		for(int i=0;i<vertices.length;i++) {
@@ -199,12 +199,5 @@ public class DGraph implements graph,Serializable{
 		return edges;
 	}
 
-public void addListener(GraphGui listener){
-	this.updater = listener;
-	}
-	
-	public void updateListener(){
-		if(updater != null)updater.graphUpdater();
-		}
 
 }

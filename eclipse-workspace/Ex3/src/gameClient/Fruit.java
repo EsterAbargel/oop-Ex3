@@ -3,6 +3,7 @@ package gameClient;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import dataStructure.edge_data;
 import utils.Point3D;
 
 
@@ -12,6 +13,7 @@ public class Fruit {
 	Point3D pos;
 	int src;
 	int dest;
+	edge_data e;
 
 
 
@@ -78,5 +80,16 @@ public class Fruit {
 	 public int getDest() {
 		 return this.dest;
 	 }
+
+	public void setEdge(edge_data edge) {
+		// TODO Auto-generated method stub
+		this.e=edge;
+		
+	}
+
+	public edge_data getEdge() {
+		// TODO Auto-generated method stub
+		return this.e;
+	}
 
 }

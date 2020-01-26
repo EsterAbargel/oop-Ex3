@@ -1,25 +1,5 @@
 package gameClient;
 
-/**
-import java.io.File;
-import java.io.IOException;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Calendar;
-import java.util.Locale;
-import java.util.Date;
-import de.micromata.opengis.kml.v_2_2_0.Document;
-import de.micromata.opengis.kml.v_2_2_0.Icon;
-import de.micromata.opengis.kml.v_2_2_0.IconStyle;
-import de.micromata.opengis.kml.v_2_2_0.Kml;
-import de.micromata.opengis.kml.v_2_2_0.Placemark;
-import de.micromata.opengis.kml.v_2_2_0.TimeSpan;
-*/
-
-
-
-
 import de.micromata.opengis.kml.v_2_2_0.*;
 import de.micromata.opengis.kml.v_2_2_0.Icon;
 
@@ -42,13 +22,12 @@ import java.nio.file.Paths;
 import javax.swing.JOptionPane;
 
 import Server.game_service;
-import dataStructure.edge_data;
 
 
 public class KML_Logger 
 {
-	public static ArrayList<Robot> robotArray;
-	public static ArrayList<Fruit> fruitArray;
+	public static ArrayList<Robot> robots;
+	public static ArrayList<Fruit> fruits;
 
 	public static Document doc;
 	public static int c;
@@ -94,17 +73,15 @@ public class KML_Logger
 			{
 				Thread.sleep(200);
 				c++;
-				robotArray = new ArrayList<Robot>();
-				fruitArray = new ArrayList<Fruit>();
+				robots = new ArrayList<Robot>();
+				fruits = new ArrayList<Fruit>();
 				if(!game.getFruits().isEmpty())
 				{
 					for(String fruit: game.getFruits())
 					{
 						Fruit currFruit = new Fruit(fruit);
-						edge_data e=(tempGUI.fruitToEdge(currFruit));
-						currFruit.setSrc(e.getSrc());
-						currFruit.setDest(e.getDest());
-						fruitArray.add(currFruit);	
+						currFruit.setEdge(tempGUI.findFruitEdge(currFruit.getPos()));
+						fruits.add(currFruit);	
 					}
 				}
 				if(!game.getRobots().isEmpty())
@@ -112,11 +89,11 @@ public class KML_Logger
 					for(String robot: game.getRobots())
 					{
 						Robot currRobot = new Robot(robot);
-						robotArray.add(currRobot);	
+						robots.add(currRobot);	
 					}
 				}
-				kmlRobots(robotArray,doc,kmldoc);
-				kmlFruits(fruitArray,doc,kmldoc);
+				kmlRobots(robots,doc,kmldoc);
+				kmlFruits(fruits,doc,kmldoc);
 					
 			}
 			
@@ -125,7 +102,7 @@ public class KML_Logger
 	            int s = JOptionPane.showConfirmDialog(null,"GameOver, Do you want to save the game to KML?","Please choose Yes/No",JOptionPane.YES_NO_OPTION);
 	            if(s==0)
 	            {
-	            	File f= new File("kmlFile" + myGameGUI.level+".kml");
+	            	File f= new File("kmlFile" + MyGameGUI.getLevel()+".kml");
 	            	kmldoc.marshal(f);
 	                String kmlString =  new String(Files.readAllBytes(Paths.get(f.getName())));
 	                game.sendKML(kmlString);
@@ -140,7 +117,7 @@ public class KML_Logger
 	
 	public static void kmlRobots(ArrayList<Robot> robotArraym,Document doc1,Kml kmldoc) throws ParseException
 	{
-		for(Robot robot: robotArray)
+		for(Robot robot: robots)
 		{
 			  Placemark rob_mark  = doc1.createAndAddPlacemark();
 			  Icon rob_icon = new Icon();

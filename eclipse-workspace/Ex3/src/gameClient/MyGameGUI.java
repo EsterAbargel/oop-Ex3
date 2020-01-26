@@ -1,497 +1,413 @@
 package gameClient;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Menu;
+import java.awt.MenuBar;
+import java.awt.MenuItem;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
+import java.text.DecimalFormat;
 import java.text.ParseException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 
+import javax.imageio.ImageIO;
 import javax.management.RuntimeErrorException;
-import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import gameClient.Fruit;
 import Server.Game_Server;
+import gameClient.Robot;
 import Server.game_service;
-import algorithms.Graph_Algo;
-import dataStructure.DGraph;
-import dataStructure.EdgeData;
-import dataStructure.edge_data;
-import dataStructure.node_data;
 import utils.Point3D;
+import dataStructure.*;
+import algorithms.*;
+import gameClient.KML_Logger;
 
-public class MyGameGUI extends JFrame implements ActionListener, MouseListener, Runnable
+
+
+public class MyGameGUI extends JFrame implements ActionListener , MouseListener, Runnable 
 {
-	public DGraph graph;
-	int mode;
-	double [] size;
-	public ArrayList <Robot> rb= new ArrayList<>();
-	public ArrayList <Fruit> fr = new ArrayList<>();
-	static game_service game;
-	public int level;
-	int numOfRobots;
-	boolean paintRobots = false;
+	public ArrayList<Fruit> fr;
+	public BufferedImage robotImage; //robot icon.
+	public BufferedImage appleImage; 
+	public BufferedImage bannaImage; 
+	private DGraph graph;
+	public static game_service game;
+	private static double maxX = Double.NEGATIVE_INFINITY;
+	private static double maxY = Double.NEGATIVE_INFINITY;
+	private static double minX = Double.POSITIVE_INFINITY;
+	private static double minY = Double.POSITIVE_INFINITY;
+	private int numOfRobots;
+	private Boolean PaintRobots;
+	boolean manualMode;
 	Thread clientThread;
-	private int score;
+	private boolean firstpress=false;
+	private static int score=0;
+	private static int moves=0;
+	public static int level;
+	public static int id;
 
-	public static void main (String[]args)
+
+	public static void main(String[] args) 
 	{
-		MyGameGUI mmm = new MyGameGUI();
+		MyGameGUI gui = new MyGameGUI();
+		gui.setVisible(true);
 	}
+
 
 	public MyGameGUI() 
 	{
 		gui();
 	}
 
-	public MyGameGUI(DGraph graph)
+	private void gui() 
 	{
-		this.graph = new DGraph(graph);
-		gui();
-	}
 
-	public void gui()
-	{
+		PaintRobots = false;
 		this.setSize(1280, 720);
 		this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		this.setVisible(true);
+		this.addMouseListener(this);
+		
+		try 
+		{
+			robotImage = ImageIO.read(new File("Unicorn1.png"));
+			bannaImage = ImageIO.read(new File("Bananna.png"));
+			appleImage = ImageIO.read(new File("Apple.png"));
+		}
+
+		catch (IOException e) 
+		{
+			e.printStackTrace();
+		}
+
+
+
+		MenuBar menuBar = new MenuBar();
+		Menu mode = new Menu("Game Mode");
+		menuBar.add(mode);
+		MenuItem auto = new MenuItem("Auto Game");
+		auto.addActionListener(this);
+		MenuItem manual = new MenuItem("manual Game");
+		manual.addActionListener(this);
+		mode.add(auto);
+		mode.add(manual);
+		this.setMenuBar(menuBar);
+		this.addMouseListener(this);
 		clientThread = new Thread(this);
-
-		String lev= JOptionPane.showInputDialog("Choose the level you want to play between 0 to 23");
-		this.level = Integer.parseInt(lev);
-		while (level< 0 || level >23)
-		{
-			lev = JOptionPane.showInputDialog(null, "the level can be only a number between 0 to 23. choose again");
-			level = Integer.parseInt(lev);
-		}
-
-		this.game = Game_Server.getServer(level);
-		String strGraph = game.getGraph();
-		graph = new DGraph();
-		graph.init(strGraph);
-
-		String strGame = game.toString();
-		this.numOfRobots = Integer.parseInt(strGame.substring(strGame.indexOf("robots")+8, strGame.indexOf("graph")-2));
-
-		this.size=organizedScale(graph.nd);
-		graph.nd.forEach((k, v) -> {
-			Point3D loc = v.getLocation();
-			Point3D newL = new Point3D((int)scale(loc.x(),size[0],size[1],50,1230), (int)scale(loc.y(),size[2],size[3],80,670));
-			v.setLocation(newL); });
-		initFruits();
-
-		String[] options = {"Automate", "Manual"};
-		this.mode = JOptionPane.showOptionDialog(null, "Choose the mode of the game", "Message", 
-				JOptionPane.DEFAULT_OPTION, JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
-		if(mode==0) 
-		{
-			initRobots();
-			game.startGame();
-		/*	Thread kmlThread = new Thread(new Runnable() 
-			{
-				@Override
-				public void run() 
-				{
-					try
-					{
-						KML_Logger.createKML(game);
-					}
-					catch (ParseException | InterruptedException | IOException e)
-					{
-						throw new RuntimeErrorException(null, "Error running kmlThread");
-					}
-				}
-			});
-			kmlThread.start();
-			*/
-			clientThread.start();
-
-		}
-
-		else if(mode==1){
-			repaint();
-			manualRobots();
-			game.startGame();
-			clientThread.start();
-		}
 	}
 
-
-	public void paint(Graphics g)
-	{
-		super.paint(g);
-		if (this.graph != null && this.graph.nd.size() > 0) 
-		{
-			Collection<node_data> nodes = graph.getV();
-			for (node_data singleNode : nodes) {
-				Point3D p1 = singleNode.getLocation();
-				g.setColor(Color.BLUE);
-				g.fillOval(p1.ix(), p1.iy(), 10, 10);
-				g.drawString(Integer.toString(singleNode.getKey()), p1.ix()+1, p1.iy()-2);
-
-				if (graph.edgeSize()!=0 && (graph.getE(singleNode.getKey())!=null)) {  
-					Collection<edge_data> Edges = graph.getE(singleNode.getKey());
-					for (edge_data singleEdge : Edges) 
-					{
-						g.setColor(Color.RED);
-						node_data dest = graph.getNode(singleEdge.getDest());
-						Point3D p2 = dest.getLocation();
-						int x2 = p2.ix();
-						int y2 = p2.iy();
-						if (p2 != null) 
-						{
-							g.drawLine(p1.ix(), p1.iy(), x2, y2);
-							g.setColor(Color.YELLOW);
-							int xDirection = (((((p1.ix()+x2)/2)+x2)/2)+x2)/2;
-							int yDirection = (((((p1.iy()+y2)/2)+y2)/2)+y2)/2;
-							g.fillOval(xDirection, yDirection, 7, 7);	
-						}
-					}	
-
-				}
-			}
-			drawFruits(g);
-			if(paintRobots=true) drawRobots(g);
-			timer(g);
-			score(g);
-
-		}
-
-
-
-
-
-	}
-	public edge_data fruitToEdge(Fruit f) 
-	{
-		edge_data ans = null;
-		Point3D fruitPoint = f.getPos();
-		for(node_data n:graph.getV()) {
-			Collection<edge_data> ed = graph.getE(n.getKey());
-			if(ed!=null) 
-			{
-				for(edge_data e : ed) {
-					Point3D srcPoint = graph.getNode(e.getSrc()).getLocation();
-					Point3D destPoint = graph.getNode(e.getDest()).getLocation();
-					if ( Math.abs(fruitPoint.distance2D(srcPoint) + fruitPoint.distance2D(destPoint)-srcPoint.distance2D(destPoint))<0.01) 
-					{
-						f.setSrc(e.getSrc());
-						f.setDest(e.getDest());
-						return e;
-					}
-				}
-			}
-		}
-
-		return ans;
-	}
-
-	public void initFruits()
-	{
-		if(fr!=null) fr.clear();
-		if (game.getFruits().size() > 0) 
-		{
-			int iterF = game.getFruits().size();
-			for(int i=0; i < iterF; i++)
-			{
-				Fruit f=new Fruit((String)game.getFruits().get(i));
-				fr.add(f);
-				Point3D pos = f.getPos();
-				f.setPos(new Point3D((int)scale(pos.x(),size[0],size[1],50,1230), (int)scale(pos.y(),size[2],size[3],80,670)));
-				fruitToEdge(f);
-			}
-		}
-
-	}
-
-	public void drawFruits(Graphics g)
-	{
-		ImageIcon apple = new ImageIcon("Apple.png");
-		ImageIcon banana = new ImageIcon("Bananna.png");
-		//draw
-		int srcF, destF;
-		Point3D tempS, tempD;
-		for (int i=0; i < fr.size(); i++) 
-		{
-			srcF = fr.get(i).getSrc();
-			destF = fr.get(i).getDest();
-			if (fr.get(i).getType() == -1) 
-			{
-				tempS = this.graph.getNode(srcF).getLocation();
-				tempD = this.graph.getNode(destF).getLocation();
-				g.drawImage(apple.getImage(), (int)(fr.get(i).getPos().ix())-10, (int)(fr.get(i).getPos().iy())-25, 70,60, null);
-				//g.drawImage(apple.getImage(), (int)((tempS.ix()*0.3)+(0.7*tempD.ix()))-5, (int)((tempS.iy()*0.3)+(0.7*tempD.iy()))-10, (int)((tempS.ix()*0.3)+(0.7*tempD.ix()))+15, (int)((tempS.iy()*0.3)+(0.7*tempD.iy()))+10, 0, 0, 500, 500, null);
-			}
-			else {
-				tempS = this.graph.getNode(srcF).getLocation();
-				tempD = this.graph.getNode(destF).getLocation();
-				g.drawImage(banana.getImage(), (int)(fr.get(i).getPos().ix())-10, (int)(fr.get(i).getPos().iy())-25, 70,70, null);
-				//g.drawImage(banana.getImage(), (int)((tempS.ix()*0.7)+(0.3*tempD.ix()))-5, (int)((tempS.iy()*0.7)+(0.3*tempD.iy()))-10, (int)((tempS.ix()*0.7)+(0.3*tempD.ix()))+15, (int)((tempS.iy()*0.7)+(0.3*tempD.iy()))+10, 0, 0, 532, 470, null);
-			}
-		}
-	}
-
-	public void initRobots()
-	{
-		if(rb!=null) rb.clear();
-		for(int i = 0; i < numOfRobots; i++)
-		{
-			game.addRobot(i);
-			Robot r = new Robot((String)game.getRobots().get(i));
-			rb.add(r);
-
-			int rand = (int)(Math.random()*(fr.size()));
-			Fruit f = fr.get(rand);
-			if (f.getType()==1) 
-			{
-				r.setSrc(f.getSrc());
-				r.setDest(f.getDest());
-				r.setPos(graph.getNode(r.getSrc()).getLocation());
-			}
-			else 
-			{
-				r.setSrc(f.getDest());
-				r.setDest(f.getSrc());
-				r.setPos(graph.getNode(r.getSrc()).getLocation());
-			}
-			fr.remove(f);
-
-		}
-
-		paintRobots = true;
-	}
-
-	public void drawRobots(Graphics g)
-	{
-		if (rb !=null) 
-		{
-			Point3D pos;
-			ImageIcon imageR = new ImageIcon("Unicorn1.png");
-			if (rb.size() > 0) 
-			{
-				for (int j=0; j< rb.size(); j++) 
-				{
-					pos = new Point3D((int)scale(rb.get(j).getPos().x(),this.size[0],this.size[1],50,1230), (int)scale(rb.get(j).getPos().y(),this.size[2],this.size[3],80,670));
-					g.drawImage(imageR.getImage(), rb.get(j).getPos().ix()-55, rb.get(j).getPos().iy()-55, 130,130, null);
-				}
-			}
-		}
-	}
-
-	public boolean checkNode (int num) //return true if the key belongs to one of the graph nodes
-	{
-		Collection <node_data> Nodes = this.graph.getV();
-		for (node_data n:Nodes)
-			if ((num==n.getKey()))
-				return true;
-		return false;
-	}
-
-	public int checkPos(double x,double y)  //return key of node if the point excepted equals to one of the the nodes location 
-	{
-		Collection <node_data> Nodes = this.graph.getV();
-		for (node_data n:Nodes)
-		{
-			if(x==n.getLocation().x()&&y==n.getLocation().y()) 
-			{
-				return n.getKey();
-			}
-		}
-		return -1;
-	}
-
-	private static double scale(double data, double r_min, double r_max, double t_min, double t_max)
-	{
-		double res = ((data - r_min) / (r_max-r_min)) * (t_max - t_min) + t_min;
-		return res;
-	}
-
-	private static double[] organizedScale(HashMap<Integer, node_data> n) 
-	{
-		double [] ans = {Double.MAX_VALUE, Double.MIN_VALUE ,Double.MAX_VALUE ,Double.MIN_VALUE};
-		n.forEach((k, v) -> {
-			if (v.getLocation().x()<ans[0]) ans[0] = v.getLocation().x();
-			if (v.getLocation().x()>ans[1]) ans[1] = v.getLocation().x();
-			if (v.getLocation().y()<ans[2]) ans[2] = v.getLocation().y();
-			if (v.getLocation().y()>ans[3]) ans[3] = v.getLocation().y();
-		});
-		return ans;
-	}
-
-	public void manualRobots()
-	{
-		if (mode == 1)
-		{
-			if (game.getRobots().size()==0)
-			{
-				for(int i=0; i< numOfRobots; i++)
-				{
-					String ans = JOptionPane.showInputDialog(null, "choose the number of the node you want to place the robot");
-					while (! checkNode(Integer.parseInt(ans)))
-					{
-						ans = JOptionPane.showInputDialog(null, "the robot can be placed only on one of the nodes. try again");
-						checkNode(Integer.parseInt(ans));
-					}
-					this.game.addRobot(i);
-					Robot r = new Robot((String)game.getRobots().get(i));
-					rb.add(r);
-					r.setSrc(Integer.parseInt(ans));
-					r.setPos(this.graph.getNode(Integer.parseInt(ans)).getLocation());
-					paintRobots = true;
-				}
-				repaint();
-			}
-		}
-
-	}
-
-	private void timer(Graphics g) 
-	{
-		g.setColor(Color.BLACK);
-		g.drawString("TIME TO END: "+ (int)(game.timeToEnd()/1000), 1000, 100);
-	}
 
 	@Override
-	public void mouseClicked(MouseEvent e) 
+	public void actionPerformed(ActionEvent event) 
 	{
-		// TODO Auto-generated method stub
-	}
-
-	@Override
-	public void mousePressed(MouseEvent e) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void mouseReleased(MouseEvent e) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void mouseEntered(MouseEvent e) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void mouseExited(MouseEvent e) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void actionPerformed(ActionEvent e) {
-		// TODO Auto-generated method stub
-
-	}
-
-	@Override
-	public void run() 
-	{
-		// TODO Auto-generated method stub
-
-		while (game!= null && game.isRunning()) 
+		JFrame start = new JFrame();
+		String action = event.getActionCommand();
+		if (action.equals("manual Game")) 
 		{
+			manualMode=true;
+			String user = JOptionPane.showInputDialog(start,"enter id: ");
 			try 
 			{
-				if(mode==0)
-				{
-					repaint();
-					moveRobots();
-					initFruits();
-					initRobots();
-					game.move();
-					Thread.sleep(1000);
-
-				}
-				else if(mode == 1)
-				{
-					game.move();
-					initFruits();
-					initRobots();
-					repaint();
-					Thread.sleep(1000);
-				}
+				id = Integer.parseInt(user);
+				Game_Server.login(id);
 
 			}
-			catch (Exception e)
+			catch (Exception e) 
 			{
-				throw new RuntimeException("Exception in run time");
-			}
+				throw new RuntimeException("Invalid Id");
+			} 
+			try 
+			{
+				level = chooseScenario();
+				if (level < 0 &&level!=-31) 
+				{
+					JOptionPane.showMessageDialog(start, "Invalid level");
+				} 
+				else 
+				{
+					game = Game_Server.getServer(level);
+					String Graph_str = game.getGraph();
+					graph = new DGraph();
+					graph.init(Graph_str);
 
-		}
-		Object[] option = {"Yes","No"};
-		JOptionPane.showMessageDialog(null, "GameOver, Final Score is: "+ score);
-		int toKML = JOptionPane.showOptionDialog(null, "Game over:\nyou got "+score+" points with "
-				+ "Do you want to save this game to a kml file?","Game over",
-				JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, option,null);
-		if(toKML == 0) {
-			try {
-				KML_Logger.createKML(game);
-			} catch (ParseException | IOException | InterruptedException e) {
-				// TODO Auto-generated catch block
+					//get robots count for the scenario
+					try 
+					{
+						String info = game.toString();
+						JSONObject line;
+						line = new JSONObject(info);
+						JSONObject obj = line.getJSONObject("GameServer");
+						numOfRobots = obj.getInt("robots");
+					}
+					catch (JSONException e)
+					{
+						throw new RuntimeException(" Json");
+					}
+					Collection<node_data> findMinMax = graph.getV();
+					minX = findMinX(findMinMax);
+					maxX = findMaxX(findMinMax);
+					minY = findMinY(findMinMax);
+					maxY = findMaxY(findMinMax);
+					repaint();
+					addManualRobots();
+					game.startGame();
+
+					//open kml thread to save data during game
+					Thread kmlThread = new Thread(new Runnable() 
+					{
+						@Override
+						public void run() 
+						{
+							try
+							{
+								KML_Logger.createKML(game);
+							}
+							catch (ParseException | InterruptedException | IOException e)
+							{
+								throw new RuntimeErrorException(null, "Error running kmlThread");
+							}
+						}
+					});
+					kmlThread.start();
+					clientThread.start();
+				}
+			} 
+			catch (Exception e) 
+			{
+				JOptionPane.showMessageDialog(start, "Error in manual game");
 				e.printStackTrace();
 			}
-		}  
-
-	}
-
-	public void moveRobots() throws JSONException 
-	{
-		List<String> log = game.move();
-		if(log!=null) {
-			game.timeToEnd();
-			for(int i=0;i<log.size();i++) 
-			{
-				String robot_json = log.get(i);
-				Robot r = new Robot (robot_json);
-				if(r.getDest()==-1) 
-				{
-					game.chooseNextEdge(r.getID(), nextNode(r.getSrc()));
-				}
-				game.move();
-			}
 		}
-	}
-
-	private int nextNode(int src) 
-	{
-		Graph_Algo graphAlgo=new Graph_Algo();
-		int robID =-1;
-		double shortestpathdist=Integer.MAX_VALUE;
-		graphAlgo.init(graph);
-		for (Fruit f:fr) 
+		if (action.equals("Auto Game")) 
 		{
-			double returnshortst = graphAlgo.shortestPathDist(src, f.getDest());
-			if (returnshortst < shortestpathdist) 
+			manualMode=false;
+			String idUser = JOptionPane.showInputDialog(start,"please enter your id: ");
+
+			try 
 			{
-				try 
+				id = Integer.parseInt(idUser);
+				Game_Server.login(id);
+
+
+			}
+			catch (Exception e) 
+			{
+				throw new RuntimeException("Invalid Id");
+			} 
+
+			try 
+			{
+				level = chooseScenario();
+				if (level < 0 ) 
 				{
-					shortestpathdist = graphAlgo.shortestPathDist(src, f.getDest());
-					robID = graphAlgo.shortestPath(src, f.getDest()).get(1).getKey();
+					JOptionPane.showMessageDialog(start, "Invalid level");
+				} 
+				else 
+				{
+					game = Game_Server.getServer(level);
+					String Graph_str = game.getGraph();
+					graph = new DGraph();
+					graph.init(Graph_str);
+					try 
+					{
+						String info = game.toString();
+						JSONObject line;
+						line = new JSONObject(info);
+						JSONObject obj = line.getJSONObject("GameServer");
+						numOfRobots = obj.getInt("robots");
+					}
+					catch (JSONException e)
+					{
+						throw new RuntimeException("parse Json");
+					}
+
+					fr= new ArrayList<Fruit>();
+					if(!game.getFruits().isEmpty())
+					{
+						for (String fruit : game.getFruits()) 
+						{
+							Fruit currFruit = new Fruit(fruit);
+							currFruit.setEdge(findFruitEdge(currFruit.getPos()));
+							fr.add(currFruit);
+						}
+					}
+					Collection<node_data> listNodes = graph.getV();
+					minX = findMinX(listNodes);
+					maxX = findMaxX(listNodes);
+					minY = findMinY(listNodes);
+					maxY = findMaxY(listNodes);
+					drawAutoRobots();
+					PaintRobots=true;
+					game.startGame();
+					//open kml thread to save data during game
+					Thread kmlThread = new Thread(new Runnable() 
+					{
+						@Override
+						public void run() 
+						{
+							try
+							{
+								KML_Logger.createKML(game);
+							}
+							catch (ParseException | InterruptedException | IOException e)
+							{
+								throw new RuntimeErrorException(null, "Error running kmlThread");
+							}
+						}
+					});
+					kmlThread.start();
+					clientThread.start();
+
 				}
-				catch (Exception e)
+			} 
+			catch (Exception e) 
+			{
+				JOptionPane.showMessageDialog(start, "Error in automatic game");
+			}
+		}
+	}
+	public int chooseScenario() 
+	{
+		JFrame window = new JFrame();
+		int scenarioNum;
+		try
+		{
+			String inputUser = JOptionPane.showInputDialog(window, "Please enter scenario number between 0-23");
+			scenarioNum=Integer.parseInt(inputUser);
+
+		}
+		catch(Exception e)
+		{
+			throw new RuntimeException("The scenario must be a number, please try again");
+		}
+		if(scenarioNum<0 || scenarioNum>23) 
+		{
+			JOptionPane.showMessageDialog(window, "The number need to be between 0-23, please try again " );
+			return -1;
+		}
+		else 
+		{
+			return scenarioNum;
+		}
+
+	}
+
+	@Override
+	public void paint(Graphics g) 
+	{
+		super.paint(g);
+		g.setFont(new Font ("Courier", Font.PLAIN,20));
+		if (graph == null && game !=null ) 
+		{
+			JFrame mesg = new JFrame(); 
+			JOptionPane.showMessageDialog(mesg, "There Isn't Graph To Show");
+		}
+		else if(game !=null  && graph!=null)
+		{	
+			drawGraph(g);
+		}
+
+		//draw fruits
+		if(game!=null && !game.getFruits().isEmpty())
+		{
+			drawFruits(g);
+		}
+		//draw robots
+		if (PaintRobots) 
+		{
+			drawRobots(g);
+		}
+		//draw timer
+		timer(g);
+		//calculate score and moves
+		GameScoreAndMoves(g);
+		//printLevel(graph);
+	}
+
+
+	public void drawGraph(Graphics g) {
+		for (node_data currNode : graph.getV()) 
+		{
+			g.setColor(Color.blue);
+			g.setFont(new Font ("Courier", Font.PLAIN,30));
+			Point3D srcNode = currNode.getLocation();
+			double srcScaleXNode = scale(srcNode.x(),minX, maxX, 50, 1230);
+			double srcScaleYNode = scale(srcNode.y(),minY, maxY, 80, 670);
+			g.fillOval((int)srcScaleXNode, (int)srcScaleYNode, 12, 12);
+			g.setColor(Color.blue);
+			g.drawString("" + currNode.getKey(), (int)srcScaleXNode, (int)srcScaleYNode+20);
+
+
+			if ((graph.getE(currNode.getKey())!=null)) 
+			{
+				for (edge_data edge : graph.getE(currNode.getKey())) 
 				{
-					robID=f.getSrc();
+
+					Point3D destPoint = graph.getNode(edge.getDest()).getLocation();
+					g.setColor(Color.RED);
+					double destScaleX = scale(destPoint.x(),minX, maxX, 50, 1230);
+					double destScaleY = scale(destPoint.y(),minY, maxY, 80,670);
+					Graphics2D g2 = (Graphics2D) g;
+					g2.setStroke(new BasicStroke(2));
+					g2.drawLine((int) srcScaleXNode, (int) srcScaleYNode, (int) destScaleX, (int) destScaleY);
+
 				}
 			}
 		}
-		return robID;
 	}
-	private void score(Graphics g)
+
+	public void drawFruits(Graphics g) {
+		for (String f:game.getFruits()) 
+		{
+			Fruit currFruit = new Fruit(f); 
+			Point3D fruitLocation = currFruit.getPos();
+			double fruitScaleX = scale(fruitLocation.x() , minX, maxX, 50, 1230);
+			double fruitScaleY = scale(fruitLocation.y() , minY, maxY,80, 670);
+			if(currFruit.getType()<0)
+			{
+				//apple
+				g.drawString(currFruit.getV() + " v", (int) fruitScaleX - 9, (int) fruitScaleY + 11);
+				g.drawImage(appleImage, (int)fruitScaleX-10, (int)fruitScaleY-25, 70,60,null);
+			}
+			else
+			{
+				//banana
+				g.drawImage(bannaImage, (int)fruitScaleX-10, (int)fruitScaleY-25,70,70, null);
+				g.drawString(currFruit.getV() + " ^", (int) fruitScaleX - 9, (int) fruitScaleY + 11);
+			}
+
+		}
+	}
+
+	public void drawRobots(Graphics g) {
+		for (String r: game.getRobots()) 
+		{
+
+			Robot currRobot = new Robot (r);
+			Point3D robotLocation = currRobot.getPos();
+			double robotScaleX = scale(robotLocation.x() , minX, maxX, 50, 1230);
+			double robotScaleY = scale(robotLocation.y() , minY, maxY, 80, 670);
+			g.drawImage(robotImage, (int)robotScaleX-55, (int)robotScaleY-55,130,130, null);
+		}
+	}
+
+
+	//calculate score and display on gui
+	private void GameScoreAndMoves(Graphics graph)
 	{
 		try 
 		{
@@ -499,7 +415,9 @@ public class MyGameGUI extends JFrame implements ActionListener, MouseListener, 
 			JSONObject line = new JSONObject(info);
 			JSONObject GameServer = line.getJSONObject("GameServer");
 			score = GameServer.getInt("grade");
-			g.drawString("Score: "+ score, 1000,120);
+			moves = GameServer.getInt("moves");
+			graph.drawString("Score: "+ score, (int)minX+1500,(int)maxY+200);
+			graph.drawString("Moves: "+ moves, (int)minX+1500,(int)maxY+300);
 		}
 		catch (JSONException e) 
 		{
@@ -507,6 +425,438 @@ public class MyGameGUI extends JFrame implements ActionListener, MouseListener, 
 		} 
 	}
 
+	//draw robots in automatic game
+	private void drawAutoRobots()
+	{
+		ArrayList<Fruit> fruitsTemp=new ArrayList<Fruit>();
+		for (String f : game.getFruits()) 
+		{
+			Fruit currF = new Fruit(f);
+			currF.setEdge(findFruitEdge(currF.getPos()));
+			fruitsTemp.add(currF);
+		}
+		int robotKey=0;
+		for (int i =0; i<numOfRobots;i++) 
+		{
+			if (fruitsTemp==null) 
+			{
+				robotKey = (int)(Math.random()*graph.getV().size());
+				while (!game.getRobots().contains(robotKey) && !graph.getV().contains(robotKey)) 
+				{
+					game.addRobot(robotKey);
+				}	
+			}
+			else 
+			{
+				edge_data fruitEdge = fruitsTemp.get(0).getEdge();
+				//edge_data fruitEdge = findFruitEdge(fruitsTemp.get(0).getLocation());
+				int fruitSrc=fruitEdge.getSrc();
+				int fruitDest=fruitEdge.getDest();
+				int robotLocation = 0;
+				if (fruitsTemp.get(0).getType() == -1) 
+				{
+					robotLocation=Math.max(fruitDest, fruitSrc);
+				} 
+				else if (fruitsTemp.get(0).getType() == 1) 
+				{
+					robotLocation=Math.min(fruitDest, fruitSrc);
+				}
+				game.addRobot(robotLocation);
+				fruitsTemp.remove(0);
+			}
+		}
+		PaintRobots=true;
+	}
+
+
+
+	//find on which edge the fruit is on
+	public edge_data findFruitEdge (Point3D fruitPoint) 
+	{
+		edge_data foundEdge = null;
+		if(this.graph != null) 
+		{
+			if (this.graph.getV()!=null) 
+			{
+				for (node_data node: this.graph.getV()) 
+				{
+					if (this.graph.getE(node.getKey())!=null) 
+					{
+						for (edge_data edge : this.graph.getE(node.getKey())) 
+						{
+							Point3D src = this.graph.getNode(edge.getSrc()).getLocation();
+							Point3D dest = this.graph.getNode(edge.getDest()).getLocation();
+							double edgeDistance = Math.sqrt(Math.pow(src.x()-dest.x(), 2)+Math.pow(src.y()-dest.y(), 2));
+							double fruitDistanceToPoints= Math.sqrt((Math.pow((src.x()-fruitPoint.x()), 2)+Math.pow((src.y()-fruitPoint.y()),2))) + Math.sqrt((Math.pow((fruitPoint.x()-dest.x()), 2)+Math.pow((fruitPoint.y()-dest.y()), 2)));
+							if(Math.abs(fruitDistanceToPoints-edgeDistance)<0.0000001)
+							{
+								foundEdge=edge;
+							}
+						}
+
+					}
+				}
+			}
+		}
+		if(foundEdge!=null)
+		{
+			return foundEdge;
+		}
+		else
+		{
+			return null;
+		}
+
+
+	}
+
+
+	private double scale(double data, double r_min, double r_max, double t_min, double t_max) 
+	{
+		double res = ((data - r_min) / (r_max - r_min)) * (t_max - t_min) + t_min;
+		return res;
+	}
+
+
+	public static double findMinX(Collection<node_data> nodes) 
+	{
+		for(node_data node : nodes) 
+		{
+			double temp = node.getLocation().x();
+			if(temp<minX)
+				minX=temp;
+		}
+		return minX;
+	}
+	public static double findMinY(Collection<node_data> nodes) 
+	{
+		for(node_data node : nodes) 
+		{
+			double temp = node.getLocation().y();
+			if(temp<minY)
+				minY=temp;
+		}
+		return minY;
+	}
+	public static double findMaxX(Collection<node_data> nodes) 
+	{
+		for(node_data node : nodes) 
+		{
+			double temp = node.getLocation().x();
+			if(temp>maxX)
+				maxX=temp;
+		}
+		return maxX;
+	}
+	public static double findMaxY(Collection<node_data> nodes) 
+	{
+		for(node_data node : nodes) 
+		{
+			double temp = node.getLocation().y();
+			if(temp>maxY)
+				maxY=temp;
+		}
+		return maxY;
+	}
+
+	public void moveRobots(game_service game , graph g) 
+	{
+		List<String> log = game.move();
+		if(log!=null) 
+		{
+			for(int i=0;i<log.size();i++) 
+			{
+				String robot_json = log.get(i);
+				try 
+				{
+					fr.clear();
+					if(!game.getFruits().isEmpty())
+					{
+						for (String fruit : game.getFruits()) 
+						{
+							Fruit currFruit = new Fruit(fruit);
+							currFruit.setEdge(findFruitEdge(currFruit.getPos()));
+							fr.add(currFruit);
+						}
+					}
+
+					JSONObject line = new JSONObject(robot_json);
+					JSONObject obj = line.getJSONObject("Robot");
+					int robotId = obj.getInt("id");
+					int robotSrc = obj.getInt("src");
+					int robotDest = obj.getInt("dest");
+					if(robotDest==-1) 
+					{
+						try
+						{
+							robotDest = nextNode(robotSrc,game);
+
+							game.chooseNextEdge(robotId, robotDest);
+						}
+						catch(Exception e)
+						{
+							throw new RuntimeException("Error in nextNode function");
+						}
+
+
+					}
+				}
+				catch (JSONException e) 
+				{
+					throw new RuntimeException("Error in moveRobots function");
+				}
+			}
+		}
+	}
+
+
+	private int levelSleep(graph g)
+	{
+		fr= new ArrayList<Fruit>();
+		if(!game.getFruits().isEmpty())
+		{
+			for (String fruit : game.getFruits()) 
+			{
+				Fruit currFruit = new Fruit(fruit);
+				currFruit.setEdge(findFruitEdge(currFruit.getPos()));
+				fr.add(currFruit);
+			}
+		}
+
+		ArrayList<Robot> robotArrayList= new ArrayList<Robot>();
+		if(!game.getRobots().isEmpty())
+		{
+			for (String rob : game.getRobots()) 
+			{
+				Robot currRob = new Robot(rob);
+				robotArrayList.add(currRob);
+			}
+		}
+
+		int ans = 100;
+		for (Robot rob: robotArrayList)
+		{
+			for (String fruit: game.getFruits()) 
+			{
+				Fruit currf = new Fruit(fruit);
+				edge_data temp = findFruitEdge(currf.getPos());
+				if(temp.getSrc()==rob.getSrc() || temp.getDest()==rob.getSrc())
+				{
+					return 50;
+				}
+			}
+		}
+		return ans;
+	}
+
+
+
+
+	//game thread to update the gui during game
+	@Override
+	public void run() 
+	{
+		while (game!= null && game.isRunning()) 
+		{
+			try 
+			{
+				{
+					if(manualMode==false)
+					{
+						moveRobots(MyGameGUI.game,this.graph);
+						Thread.sleep(levelSleep(this.graph));
+						repaint();
+
+
+					}
+					else if(manualMode==true)
+					{
+						game.move();
+						repaint();
+						Thread.sleep(1000);
+					}
+				}
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException("Exception in run time");
+			}
+
+		}
+		new SimpleDB();
+		String s = SimpleDB.printLogs(id, level);
+		JOptionPane.showMessageDialog(null, s);
+	}
+
+
+	//Possibility to draw robots manually by user 
+	private void addManualRobots()
+	{
+		for(int i=0; i<numOfRobots;i++)
+		{
+			int node = -1;
+			try 
+			{
+				String userInput = JOptionPane.showInputDialog("enter src:");
+				node = Integer.parseInt(userInput);
+				if(node==-1|| this.graph.getNode(node) == null) 
+				{
+					JOptionPane.showMessageDialog(null,"invalid");
+				}
+				MyGameGUI.game.addRobot(node);
+				PaintRobots = true;
+			}
+			catch (Exception e)
+			{
+				throw new RuntimeException("Invalid key");
+			}
+		}
+		repaint();	
+
+	}
+
+	//draw timer on gui
+	private void timer(Graphics g) 
+	{
+		g.drawString("TIME TO END: "+ (int)(game.timeToEnd()/1000), (int)minX+1500,(int)maxY+100);
+	}
+
+
+
+
+	private int nextNode(int src,game_service game) 
+	{
+		Graph_Algo graphAlgo=new Graph_Algo();
+		int rid =-1;
+		double spd=Integer.MAX_VALUE;
+		graphAlgo.init(graph);
+		for (String f:game.getFruits()) 
+		{
+			Fruit currFruit = new Fruit(f); 
+			currFruit.setEdge(findFruitEdge(currFruit.getPos()));
+			edge_data edge=currFruit.getEdge();
+			double returnshortst = graphAlgo.shortestPathDist(src, edge.getDest());
+
+
+			if (returnshortst < spd) 
+			{
+				try 
+				{
+					spd=returnshortst;
+					if(graphAlgo.shortestPath(src, edge.getDest()).size()==1)
+					{
+						rid=edge.getSrc();
+					}
+					else
+					{
+						rid = graphAlgo.shortestPath(src, edge.getDest()).get(1).getKey();
+					}
+				}
+				catch (Exception e)
+				{
+					throw new RuntimeException("algo exception");
+				}
+			}
+		}
+
+
+		return rid;
+
+	}
+
+
+	public static int getLevel() 
+	{
+		return level;
+	} 
+	//listen to mouse clicks on manual game
+	public void mouseClicked(MouseEvent clickPoint) 
+	{
+		Robot robot = null;
+		boolean canMove=false;
+		double clickPointY=clickPoint.getY();
+		double clickPointX=clickPoint.getX();
+		if(manualMode)
+		{
+			if(game.getRobots().size()==1)
+			{
+				Robot r = new Robot(game.getRobots().get(0));
+				for (edge_data ed : graph.getE(r.getSrc())) 
+				{
+					double nodePointX = scale(graph.getNode(ed.getDest()).getLocation().x(), minX, maxX, 50, 1230);
+					double nodePointY = scale(graph.getNode(ed.getDest()).getLocation().y(), minY, maxY,  80, 670);
+					if (Math.abs(clickPointX - nodePointX) < 25 && Math.abs(clickPointY - nodePointY) < 25) 
+					{
+						game.chooseNextEdge(0, ed.getDest());
+						canMove=true;
+					}
+				}
+			}
+			else 
+			{
+				if (!firstpress) 
+				{
+					for (int i = 0; i < game.getRobots().size(); i++) 
+					{
+						robot = new Robot(game.getRobots().get(i));
+						double x = scale(graph.getNode(robot.getSrc()).getLocation().x(), minX, maxX, 50, 1230);
+						double y = scale(graph.getNode(robot.getSrc()).getLocation().y(),  minY, maxY,  80, 670);
+						if (Math.abs(x - clickPointX) < 35 && Math.abs(y - clickPointY) < 35) 
+						{
+							firstpress = true;
+							break;
+						}
+					}
+				}
+				if (firstpress) 
+				{
+					for (edge_data edge : graph.getE(robot.getSrc())) 
+					{
+						double nodePointX = scale(graph.getNode(edge.getDest()).getLocation().x(), minX, maxX, 50, 1230);
+						double nodePointY = scale(graph.getNode(edge.getDest()).getLocation().y(), minY, maxY, 80, 670);
+						if (Math.abs(clickPointX - nodePointX) < 25 && Math.abs(clickPointY - nodePointY) < 25) 
+						{
+							game.chooseNextEdge(robot.getID(), edge.getDest());
+							firstpress = false;
+							canMove=true;
+						}
+					}
+				}
+			}
+		}
+		if(!canMove)
+		{
+			JOptionPane.showMessageDialog(null, "The choosen node is not a neighbor, it is not possible to move");
+		}
+	}
+
+	@Override
+	public void mouseEntered(MouseEvent arg0) 
+	{
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void mouseExited(MouseEvent arg0) 
+	{
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void mousePressed(MouseEvent arg0) 
+	{
+		// TODO Auto-generated method stub
+
+	}
+
+	@Override
+	public void mouseReleased(MouseEvent arg0) 
+	{
+		// TODO Auto-generated method stub
+
+	}
 
 
 }

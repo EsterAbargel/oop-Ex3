@@ -47,9 +47,7 @@ public class Robot {
 	public int getSpeed() { 
 		return this.speed;
 	}
-	public void incSpeed() { 
-		this.speed++; 
-	} 
+
 	public double getV() {
 		return this.value; 
 	}
@@ -79,11 +77,10 @@ public class Robot {
 		return this.pos; 
 	}
 
-	public void setPos(Point3D np) { 
-		this.pos= np;
+	public void setPos(Point3D p) { 
+		this.pos= p;
 	}
-	public void setPos(double x, double y, double z) {
-		this.pos=new Point3D(x,y,z);
-	}
+	
+	
 
 }
